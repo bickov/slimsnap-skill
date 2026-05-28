@@ -20,18 +20,23 @@ If the user passes `$ARGUMENTS` with a filename or partial match, use that file 
 
 ## How to read a capture
 
-Each SlimSnap JSON conforms to the open MIT schema at https://github.com/bickov/slimsnap-schema. The fields you care about:
+Each SlimSnap JSON conforms to the open MIT schema at https://github.com/bickov/slimsnap-schema (v1.0). The fields you care about:
 
-- `elements`: array of detected UI elements. Each has a `bbox` (x, y, width, height in pixels), a dominant `color` (hex), and `text` (OCR result, may be empty).
-- `annotations`: user-added markers, each with `type` (arrow, rectangle, highlight, callout), normalized `points` (0 to 1 floats relative to image size), `color`, and optional `text` for callouts.
-- `image_size`: `{ width, height }` in pixels of the original screenshot.
-- `token_estimate`: approximate token count of this JSON.
+- `image`: `{ width_px, height_px, file }`. Pixel dimensions of the original screenshot.
+- `screen` (optional): `{ title, app, url }`. Context about what was captured (browser tab title, app name, URL). Use it to know what kind of code to look for.
+- `elements`: array of detected UI elements. Each has `id`, `type` (one of `text`, `button`, `input`, `link`, `image`, `label`, `unknown`), `value` (the OCR text or content), `bbox`, and optional `color` (hex like `#3B82F6`).
+- `annotations`: user-drawn markers. Each has `id`, `type` (`arrow`, `rectangle`, `highlight`, `callout`, `note`), `color`, an optional `intent` (`highlight`, `explain`, `action`, `question`), and geometry depending on type: `from`/`to` for arrows, `bbox` for rectangles and callouts, `position` for point-based notes. Callouts also carry `text`. An annotation may have `target_ref` pointing at an element's `id`, explicitly linking the annotation to a specific element.
+- `estimated_tokens`: approximate token count of this JSON.
+
+**Important: `bbox` is `[x, y, width, height]` normalized to 0-1 relative to the image, not pixels.** Multiply by `image.width_px` / `image.height_px` if you need pixel values. Same for `point` (`[x, y]` normalized 0-1).
 
 Treat annotations as the user's intent:
-- An arrow points at the element the user is asking about.
-- A red rectangle usually means "this is broken" or "this is what's wrong."
-- A callout's `text` is the user's verbal comment, treat it as part of the prompt.
-- A highlight marks a region of interest.
+- The `intent` field, when present, is the most reliable signal: `highlight` means "look here", `explain` means "the callout text explains what's going on", `action` means "do this", `question` means "I'm asking about this."
+- The `text` on a callout is the user's verbal comment. Treat it as part of the prompt.
+- The `target_ref` on an annotation links it to a specific element's `id`. Follow it to find what is being marked.
+- An arrow uses `from` (the user's hand-drawn start) and `to` (what it points at).
+- A rectangle or callout uses `bbox` to mark a region.
+- Color is the user's free choice and not semantically fixed. Do not assume "red equals broken." Read `intent` and `text` instead.
 
 ## When to act
 
@@ -44,9 +49,10 @@ If no recent capture exists in either folder, ask the user to capture a screensh
 User says: "fix this broken sign-up form"
 
 1. Read the latest JSON from `.slimsnap/` (or `~/Documents/SlimSnap/`).
-2. From `elements`, identify form fields, buttons, labels. Their `bbox` coordinates tell you the layout.
-3. From `annotations`, find what the user marked: an arrow pointing at the misaligned button, a red rectangle around the email field with overflowing text, a callout that says "this is cut off."
-4. Locate the corresponding source files in the project (HTML, JSX, CSS, etc.) and propose the fix that addresses the annotated issues specifically.
+2. Check `screen.app`, `screen.url`, and `screen.title` for context so you know what kind of code to look for (React component, HTML page, native view, etc.).
+3. From `elements`, identify form fields, buttons, labels by `type` and `value`. Their `bbox` (normalized 0-1) tells you layout position relative to the image.
+4. From `annotations`, find what the user marked. When `target_ref` is present, follow it to the exact element being annotated. Use `intent` to interpret the marker: a callout with `intent: "explain"` and `text: "Duplicate Pay button"` is unambiguous, the user is telling you what's wrong.
+5. Locate the corresponding source files in the project and propose the fix that addresses the annotated issues specifically.
 
 The agent's edits should be grounded in what the JSON says is wrong, not in a guess about what the user might mean.
 

@@ -24,24 +24,22 @@ curl -L https://raw.githubusercontent.com/bickov/slimsnap-skill/main/SKILL.md \
 
 ## Use
 
-1. Capture a screenshot with SlimSnap (`⌘⇧S`).
-2. Annotate what matters: arrows, rectangles, callouts.
-3. Hit "Save JSON" (or rely on the auto-save to `~/Documents/SlimSnap/`).
-4. In Claude Code, say what you want: "fix the broken sign-up layout I just captured."
-5. Claude Code reads the latest JSON automatically and acts on it.
+1. Launch SlimSnap at least once so it publishes its config to `~/.slimsnap/config.json`.
+2. Capture a screenshot with SlimSnap (`⌘⇧S`).
+3. Annotate what matters: arrows, rectangles, callouts.
+4. Hit **Save JSON** (autosave on by default writes straight to your configured folder).
+5. In Claude Code, say what you want: "fix the broken sign-up layout I just captured."
+6. Claude Code reads the latest JSON automatically and acts on it.
 
 ## Why
 
 Pasting a raw screenshot to a coding agent costs hundreds to thousands of vision tokens per turn and the agent re-interprets pixels every time. A SlimSnap JSON costs about 700 tokens, is structured (the agent acts on coordinates), and is reusable across turns without re-paying the cost. Over a long Claude Code session, the difference in context and token spend is real.
 
-## Where it looks
+## How discovery works
 
-The skill reads from these locations in order:
+The skill is **not hardcoded** to a specific folder. SlimSnap publishes a tiny config at `~/.slimsnap/config.json` naming its current default save folder. The skill reads that file on every invocation and looks in whatever folder you have configured in the SlimSnap Settings window. Change the folder in SlimSnap and the skill follows.
 
-1. `<project root>/.slimsnap/` (per-project, opt-in)
-2. `~/Documents/SlimSnap/` (user-global, the default SlimSnap output)
-
-Most recent `.json` by modification time wins. You can also pass a specific filename as an argument.
+If you prefer keeping captures with a codebase, create a `<project>/.slimsnap/` folder and the skill will prefer it when present.
 
 ## Spec
 

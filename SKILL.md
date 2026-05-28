@@ -1,6 +1,6 @@
 ---
 name: slimsnap
-description: Use this skill when the user references something visual on their screen, a layout, a UI element, a design, a broken form, a button, a page, or says things like "fix this", "what's on screen", "the page I'm on", "see what I'm looking at". Reads the latest SlimSnap JSON capture, which is a structured description of an annotated screenshot containing bounding boxes, extracted colors, and OCR text. About 700 tokens vs ~8k for a raw image, and the agent acts on coordinates more reliably than re-interpreting pixels.
+description: Use this skill when the user references something visual on their screen, a layout, a UI element, a design, a broken form, a button, a page, or says things like "fix this", "what's on screen", "the page I'm on", "see what I'm looking at". Reads the user's latest SlimSnap JSON capture, which is a structured description of an annotated screenshot containing bounding boxes, extracted colors, and OCR text. About 700 tokens vs ~8k for a raw image, and the agent acts on coordinates more reliably than re-interpreting pixels. The skill discovers where SlimSnap saves files by reading ~/.slimsnap/config.json (no hardcoded folder).
 ---
 
 # slimsnap
@@ -9,14 +9,23 @@ SlimSnap (https://slimsnap.ai) is a Mac app that converts a screenshot into stru
 
 ## Where to find captures
 
-Check these locations in order:
+SlimSnap publishes its current save folder in a small config file the user does not manage. Read it on every invocation so the skill follows whatever the user has configured:
 
-1. `<project root>/.slimsnap/` if it exists (per-project, opt-in)
-2. `~/Documents/SlimSnap/` (user-global, the default)
+1. Read `~/.slimsnap/config.json`. Shape:
+   ```json
+   {
+     "schema_version": "1.0",
+     "default_save_folder": "/Users/<name>/Desktop",
+     "filename_pattern": "SlimSnap {date} {time}"
+   }
+   ```
+   Use `default_save_folder` as the folder to search.
 
-Pick the most recently modified `.json` file in the chosen folder. Files are named with timestamps like `2026-05-28-14-32-07.json`.
+2. Also check `<project root>/.slimsnap/` if it exists. This is an optional per-project location for users who want captures kept with the codebase. Prefer it over the config-named folder when present.
 
-If the user passes `$ARGUMENTS` with a filename or partial match, use that file instead of the latest.
+3. If `~/.slimsnap/config.json` does not exist (SlimSnap was never launched, or the user manually removed it), tell the user to launch SlimSnap once so it can publish its config, and stop. Do not guess at a folder.
+
+Within the chosen folder, pick the most recently modified `.json` file. If the user passes `$ARGUMENTS` with a filename or partial match, use that file instead of the latest.
 
 ## How to read a capture
 
@@ -42,17 +51,18 @@ Treat annotations as the user's intent:
 
 If the capture is recent (modified within the last few minutes) and the user is asking about something visual, prefer using the capture as primary context rather than asking the user to describe what they see. The capture IS the description.
 
-If no recent capture exists in either folder, ask the user to capture a screenshot with SlimSnap (`⌘⇧S` by default), annotate it, and save the JSON, then retry.
+If no recent capture exists in the configured folder, ask the user to capture a screenshot with SlimSnap (`⌘⇧S` by default), annotate it, and save the JSON, then retry.
 
 ## Worked example
 
 User says: "fix this broken sign-up form"
 
-1. Read the latest JSON from `.slimsnap/` (or `~/Documents/SlimSnap/`).
-2. Check `screen.app`, `screen.url`, and `screen.title` for context so you know what kind of code to look for (React component, HTML page, native view, etc.).
-3. From `elements`, identify form fields, buttons, labels by `type` and `value`. Their `bbox` (normalized 0-1) tells you layout position relative to the image.
-4. From `annotations`, find what the user marked. When `target_ref` is present, follow it to the exact element being annotated. Use `intent` to interpret the marker: a callout with `intent: "explain"` and `text: "Duplicate Pay button"` is unambiguous, the user is telling you what's wrong.
-5. Locate the corresponding source files in the project and propose the fix that addresses the annotated issues specifically.
+1. Read `~/.slimsnap/config.json` to get `default_save_folder`.
+2. List `.json` files in that folder, pick the most recently modified.
+3. Check `screen.app`, `screen.url`, and `screen.title` for context so you know what kind of code to look for (React component, HTML page, native view, etc.).
+4. From `elements`, identify form fields, buttons, labels by `type` and `value`. Their `bbox` (normalized 0-1) tells you layout position relative to the image.
+5. From `annotations`, find what the user marked. When `target_ref` is present, follow it to the exact element being annotated. Use `intent` to interpret the marker: a callout with `intent: "explain"` and `text: "Duplicate Pay button"` is unambiguous, the user is telling you what's wrong.
+6. Locate the corresponding source files in the project and propose the fix that addresses the annotated issues specifically.
 
 The agent's edits should be grounded in what the JSON says is wrong, not in a guess about what the user might mean.
 

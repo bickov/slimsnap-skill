@@ -2,7 +2,7 @@
 
 A [Claude Code](https://claude.com/claude-code) skill for [SlimSnap](https://slimsnap.ai). Lets Claude Code automatically read structured JSON captures of your screen, so you can say "fix this layout" instead of pasting a screenshot every turn.
 
-About 700 tokens per capture instead of ~8k for a raw image, with structured bounding boxes, extracted colors, OCR text, and your annotations.
+About 700 tokens per capture vs the API per-image cap of 1,568 tokens on Sonnet/Haiku (up to 4,784 on Opus 4.7+ per [Anthropic's vision docs](https://platform.claude.com/docs/en/build-with-claude/vision)). Structured bounding boxes, extracted colors, OCR text, and your annotations.
 
 ## Install
 

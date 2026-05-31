@@ -1,6 +1,6 @@
 ---
 name: slimsnap
-description: Use this skill when the user references something visual on their screen, a layout, a UI element, a design, a broken form, a button, a page, or says things like "fix this", "what's on screen", "the page I'm on", "see what I'm looking at". Reads the user's latest SlimSnap JSON capture, which is a structured description of an annotated screenshot containing bounding boxes, extracted colors, and OCR text. About 700 tokens vs ~8k for a raw image, and the agent acts on coordinates more reliably than re-interpreting pixels. The skill discovers where SlimSnap saves files by reading ~/.slimsnap/config.json (no hardcoded folder).
+description: Use this skill when the user references something visual on their screen, a layout, a UI element, a design, a broken form, a button, a page, or says things like "fix this", "what's on screen", "the page I'm on", "see what I'm looking at". Reads the user's latest SlimSnap JSON capture, which is a structured description of an annotated screenshot containing bounding boxes, extracted colors, and OCR text. About 700 tokens of JSON vs the API per-image cap of 1,568 tokens on Sonnet/Haiku (up to 4,784 on Opus 4.7+ per Anthropic's vision docs), and the agent acts on coordinates more reliably than re-interpreting pixels. The skill discovers where SlimSnap saves files by reading ~/.slimsnap/config.json (no hardcoded folder).
 ---
 
 # slimsnap

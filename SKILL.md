@@ -29,15 +29,27 @@ Within the chosen folder, pick the most recently modified `.json` file. If the u
 
 ## How to read a capture
 
-Each SlimSnap JSON conforms to the open MIT schema at https://github.com/bickov/slimsnap-schema (v1.0). The fields you care about:
+Each SlimSnap JSON conforms to the open MIT schema at https://github.com/bickov/slimsnap-schema. Current version is **v2.0** (`frames[]`); older installs still emit v1.0. Branch on the presence of a top-level `frames` array.
 
-- `image`: `{ width_px, height_px, file }`. Pixel dimensions of the original screenshot.
+### Schema v2 (current)
+
+- `mode`: `"single"` (a regular screenshot, one frame) or `"scroll"` (a scrollable capture — a whole page, long chat, or feed — split into frames stacked top to bottom).
+- `capture`: `{ width_px, height_px }` of the WHOLE capture, all frames stacked.
 - `screen` (optional): `{ title, app, url }`. Context about what was captured (browser tab title, app name, URL). Use it to know what kind of code to look for.
-- `elements`: array of detected UI elements. Each has `id`, `type` (one of `text`, `button`, `input`, `link`, `image`, `label`, `unknown`), `value` (the OCR text or content), `bbox`, and optional `color` (hex like `#3B82F6`).
-- `annotations`: user-drawn markers. Each has `id`, `type` (`arrow`, `rectangle`, `highlight`, `callout`, `note`), `color`, an optional `intent` (`highlight`, `explain`, `action`, `question`), and geometry depending on type: `from`/`to` for arrows, `bbox` for rectangles and callouts, `position` for point-based notes. Callouts also carry `text`. An annotation may have `target_ref` pointing at an element's `id`, explicitly linking the annotation to a specific element.
+- `frames`: the content. Each frame has:
+  - `index` (0 = top), `kind` (`"spatial"`), `dims` (`{ width_px, height_px }` of THIS frame), `position` (`{ scroll_y_px }` — the frame's top edge inside the whole capture).
+  - `elements`: detected UI elements. Each has `id`, `type` (one of `text`, `button`, `input`, `link`, `image`, `label`, `unknown`), `value` (the OCR text or content), `bbox`, and optional `color` (hex like `#3B82F6`).
+  - `annotations`: user-drawn markers. Each has `id`, `type` (`arrow`, `rectangle`, `highlight`, `callout`, `note`), `color`, an optional `intent` (`highlight`, `explain`, `action`, `question`), and geometry depending on type: `from`/`to` for arrows, `bbox` for rectangles and callouts, `position` for point-based notes. Callouts also carry `text`. An annotation may have `target_ref` pointing at an element's `id`.
+  - `images` (optional): `[{ file, offset_y_px, height_px }]` — present only when the frame's image was saved to disk alongside the JSON.
 - `estimated_tokens`: approximate token count of this JSON.
 
-**Important: `bbox` is `[x, y, width, height]` normalized to 0-1 relative to the image, not pixels.** Multiply by `image.width_px` / `image.height_px` if you need pixel values. Same for `point` (`[x, y]` normalized 0-1).
+**Important: `bbox` is `[x, y, width, height]` normalized to 0-1 relative to the FRAME (`frames[].dims`), not pixels and not the whole capture.** Absolute pixel position of anything: `y_px = position.scroll_y_px + bbox_y * dims.height_px`; `x_px = bbox_x * dims.width_px`. Same for `point` (`[x, y]` normalized 0-1). Element/annotation `id`s are unique across ALL frames, so a `target_ref` near a frame boundary may point into the adjacent frame — search all frames when following one.
+
+For `mode: "scroll"`, treat frame order as reading order: frame 0 is the top of the page. Vertical position within the whole capture comes from `position.scroll_y_px`.
+
+### Schema v1 (older installs)
+
+No `frames` array. Top-level `image` (`{ width_px, height_px, file }`), `elements`, `annotations` — same element/annotation shapes as v2, with all coordinates normalized against `image` dims. Read it as v2 with one implicit frame.
 
 Treat annotations as the user's intent:
 - The `intent` field, when present, is the most reliable signal: `highlight` means "look here", `explain` means "the callout text explains what's going on", `action` means "do this", `question` means "I'm asking about this."
@@ -60,8 +72,8 @@ User says: "fix this broken sign-up form"
 1. Read `~/.slimsnap/config.json` to get `default_save_folder`.
 2. List `.json` files in that folder, pick the most recently modified.
 3. Check `screen.app`, `screen.url`, and `screen.title` for context so you know what kind of code to look for (React component, HTML page, native view, etc.).
-4. From `elements`, identify form fields, buttons, labels by `type` and `value`. Their `bbox` (normalized 0-1) tells you layout position relative to the image.
-5. From `annotations`, find what the user marked. When `target_ref` is present, follow it to the exact element being annotated. Use `intent` to interpret the marker: a callout with `intent: "explain"` and `text: "Duplicate Pay button"` is unambiguous, the user is telling you what's wrong.
+4. Walk `frames[]` in order (v1: treat the whole document as one frame). From each frame's `elements`, identify form fields, buttons, labels by `type` and `value`. Their `bbox` (normalized 0-1 within the frame) tells you layout position.
+5. From `annotations` across all frames, find what the user marked. When `target_ref` is present, follow it to the exact element being annotated (search every frame for the id). Use `intent` to interpret the marker: a callout with `intent: "explain"` and `text: "Duplicate Pay button"` is unambiguous, the user is telling you what's wrong.
 6. Locate the corresponding source files in the project and propose the fix that addresses the annotated issues specifically.
 
 The agent's edits should be grounded in what the JSON says is wrong, not in a guess about what the user might mean.

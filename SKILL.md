@@ -11,21 +11,38 @@ SlimSnap (https://slimsnap.ai) is a Mac app that converts a screenshot into stru
 
 SlimSnap publishes its current save folder in a small config file the user does not manage. Read it on every invocation so the skill follows whatever the user has configured:
 
-1. Read `~/.slimsnap/config.json`. Shape:
+1. Read `~/.slimsnap/config.json`. Shape (schema 1.1, SlimSnap 0.5.0 and newer):
    ```json
    {
-     "schema_version": "1.0",
-     "default_save_folder": "/Users/<name>/Desktop",
-     "filename_pattern": "SlimSnap {date} {time}"
+     "schema_version": "1.1",
+     "default_save_folder": "/Users/<name>/Documents/SlimSnap",
+     "filename_pattern": "SlimSnap {date} {time}",
+     "recent_folder": "/Users/<name>/.slimsnap/recent",
+     "recent_capture_limit": 20
    }
    ```
-   Use `default_save_folder` as the folder to search.
 
-2. Also check `<project root>/.slimsnap/` if it exists. This is an optional per-project location for users who want captures kept with the codebase. Prefer it over the config-named folder when present.
+2. **Prefer `recent_folder` when it is present.** SlimSnap 0.5.0 keeps every capture there automatically, so it holds the one the user just took and marked even if they never saved a file. `default_save_folder` only ever contains captures the user explicitly chose to Save, so on its own it will miss what the user is most likely asking about.
 
-3. If `~/.slimsnap/config.json` does not exist (SlimSnap was never launched, or the user manually removed it), tell the user to launch SlimSnap once so it can publish its config, and stop. Do not guess at a folder.
+   `recent_folder` is laid out one directory per capture, named by capture time so the newest sorts last:
+   ```
+   ~/.slimsnap/recent/
+     2026-07-30T09-14-22-104233-00-00/
+       capture.json    the full export, same schema as a saved file
+       meta.json       small index: source app, dimensions, element and annotation counts, a text preview
+       frame-1.png     one image per frame, already downscaled to 1568px on the long edge
+   ```
+   Read `meta.json` first when scanning several captures; it is a few hundred bytes against a `capture.json` that can be thousands of tokens. Read `capture.json` for the one you actually need.
 
-Within the chosen folder, pick the most recently modified `.json` file. If the user passes `$ARGUMENTS` with a filename or partial match, use that file instead of the latest.
+   If `recent_folder` is absent, the user is on an older SlimSnap. Fall back to `default_save_folder` and pick the most recently modified `.json` file in it.
+
+3. Also check `<project root>/.slimsnap/` if it exists. This is an optional per-project location for users who want captures kept with the codebase. Prefer it over both folders above when present.
+
+4. If `~/.slimsnap/config.json` does not exist (SlimSnap was never launched, or the user manually removed it), tell the user to launch SlimSnap once so it can publish its config, and stop. Do not guess at a folder.
+
+If the user passes `$ARGUMENTS` with a filename or partial match, use that capture instead of the latest.
+
+If the user would rather have typed tools than a folder convention, there is also a local MCP connector that reads the same folder: https://github.com/bickov/slimsnap-mcp. This skill needs nothing installed; the connector needs one setup line but works in Claude Desktop and other MCP clients too.
 
 ## How to read a capture
 

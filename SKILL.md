@@ -51,17 +51,17 @@ Each SlimSnap JSON conforms to the open MIT schema at https://github.com/bickov/
 
 ### Schema v2 (current)
 
-- `mode`: `"single"` (a regular screenshot, one frame), `"scroll"` (a scrollable capture — a whole page, long chat, or feed — split into frames stacked top to bottom) or `"video"` (a recording, one frame per screen visited, see below).
+- `mode`: `"single"` (a regular screenshot, one frame), `"scroll"` (a scrollable capture, a whole page, long chat or feed, split into frames stacked top to bottom) or `"video"` (a recording, one frame per screen visited, see below).
 - `capture`: `{ width_px, height_px }` of the WHOLE capture, all frames stacked.
 - `screen` (optional): `{ title, app, url }`. Context about what was captured (browser tab title, app name, URL). Use it to know what kind of code to look for.
 - `frames`: the content. Each frame has:
-  - `index` (0 = top), `kind` (`"spatial"`), `dims` (`{ width_px, height_px }` of THIS frame), `position` (`{ scroll_y_px }` — the frame's top edge inside the whole capture).
+  - `index` (0 = top), `kind` (`"spatial"`), `dims` (`{ width_px, height_px }` of THIS frame), `position` (`{ scroll_y_px }`, the frame's top edge inside the whole capture).
   - `elements`: detected UI elements. Each has `id`, `type` (one of `text`, `button`, `input`, `link`, `image`, `label`, `unknown`), `value` (the OCR text or content), `bbox`, and optional `color` (hex like `#3B82F6`).
   - `annotations`: user-drawn markers. Each has `id`, `type` (`arrow`, `rectangle`, `highlight`, `callout`, `note`), `color`, an optional `intent` (`highlight`, `explain`, `action`, `question`), and geometry depending on type: `from`/`to` for arrows, `bbox` for rectangles and callouts, `position` for point-based notes. Callouts also carry `text`. An annotation may have `target_ref` pointing at an element's `id`.
-  - `images` (optional): `[{ file, offset_y_px, height_px }]` — present only when the frame's image was saved to disk alongside the JSON. Saved scroll captures include one PNG per frame in the SAME folder as the JSON; if you need visual confirmation of something the JSON describes, open that frame's file rather than asking the user for a screenshot.
+  - `images` (optional): `[{ file, offset_y_px, height_px }]`, present only when the frame's image was saved to disk alongside the JSON. Saved scroll captures include one PNG per frame in the SAME folder as the JSON; if you need visual confirmation of something the JSON describes, open that frame's file rather than asking the user for a screenshot.
 - `estimated_tokens`: approximate token count of this JSON.
 
-**Important: `bbox` is `[x, y, width, height]` normalized to 0-1 relative to the FRAME (`frames[].dims`), not pixels and not the whole capture.** Absolute pixel position of anything: `y_px = position.scroll_y_px + bbox_y * dims.height_px`; `x_px = bbox_x * dims.width_px`. Same for `point` (`[x, y]` normalized 0-1). Element/annotation `id`s are unique across ALL frames, so a `target_ref` near a frame boundary may point into the adjacent frame — search all frames when following one.
+**Important: `bbox` is `[x, y, width, height]` normalized to 0-1 relative to the FRAME (`frames[].dims`), not pixels and not the whole capture.** Absolute pixel position of anything: `y_px = position.scroll_y_px + bbox_y * dims.height_px`; `x_px = bbox_x * dims.width_px`. Same for `point` (`[x, y]` normalized 0-1). Element/annotation `id`s are unique across ALL frames, so a `target_ref` near a frame boundary may point into the adjacent frame, search all frames when following one.
 
 For `mode: "scroll"`, treat frame order as reading order: frame 0 is the top of the page. Vertical position within the whole capture comes from `position.scroll_y_px`.
 
@@ -79,7 +79,7 @@ To follow what the user did: walk `interactions` in order, read `frames[frame]` 
 
 ### Schema v1 (older installs)
 
-No `frames` array. Top-level `image` (`{ width_px, height_px, file }`), `elements`, `annotations` — same element/annotation shapes as v2, with all coordinates normalized against `image` dims. Read it as v2 with one implicit frame.
+No `frames` array. Top-level `image` (`{ width_px, height_px, file }`), `elements`, `annotations`, same element/annotation shapes as v2, with all coordinates normalized against `image` dims. Read it as v2 with one implicit frame.
 
 Treat annotations as the user's intent:
 - The `intent` field, when present, is the most reliable signal: `highlight` means "look here", `explain` means "the callout text explains what's going on", `action` means "do this", `question` means "I'm asking about this."

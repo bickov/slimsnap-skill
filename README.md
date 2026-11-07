@@ -6,6 +6,8 @@ About 700 tokens per capture vs the API per-image cap of 1,568 tokens on Sonnet/
 
 Works with **scroll captures** too (schema v2): a whole page, a long chat, an endless feed arrives as `frames[]` — page-sized units the agent reads in order, each with its own elements and annotations. Vision models can't read one tall stitched screenshot (they downscale it until the text is gone); frames JSON has no such limit.
 
+Works with **screen recordings** (schema v2.1, SlimSnap 0.6.0): record a flow and talk through it. The JSON holds one frame per screen you visited, the clicks and scrolls between them with the element they hit, and your words as captions placed where you said them. The agent follows the flow step by step instead of watching a video.
+
 ## Install
 
 Globally, available in every project:
@@ -27,7 +29,7 @@ curl -L https://raw.githubusercontent.com/bickov/slimsnap-skill/main/SKILL.md \
 ## Use
 
 1. Launch SlimSnap at least once so it publishes its config to `~/.slimsnap/config.json`.
-2. Capture a screenshot with SlimSnap (`⌘⇧S`), or a scrolling capture of a whole page (`⌘⇧L` — scroll yourself or press Autoscroll).
+2. Capture a screenshot with SlimSnap (`⌘⇧S`), a scrolling capture of a whole page (`⌘⇧L` — scroll yourself or press Autoscroll), or record a flow with your voice (`⌘⇧R`).
 3. Annotate what matters: arrows, rectangles, callouts.
 4. Hit **Save JSON** (autosave on by default writes straight to your configured folder).
 5. In Claude Code, say what you want: "fix the broken sign-up layout I just captured."

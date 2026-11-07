@@ -1,11 +1,11 @@
 ---
 name: slimsnap
-description: Use this skill when the user references something visual on their screen, a layout, a UI element, a design, a broken form, a button, a page, or says things like "fix this", "what's on screen", "the page I'm on", "see what I'm looking at". Reads the user's latest SlimSnap JSON capture, which is a structured description of an annotated screenshot containing bounding boxes, extracted colors, and OCR text. About 700 tokens of JSON vs the API per-image cap of 1,568 tokens on Sonnet/Haiku (up to 4,784 on Opus 4.7+ per Anthropic's vision docs), and the agent acts on coordinates more reliably than re-interpreting pixels. The skill discovers where SlimSnap saves files by reading ~/.slimsnap/config.json (no hardcoded folder).
+description: Use this skill when the user references something visual on their screen, a layout, a UI element, a design, a broken form, a button, a page, a flow they recorded, or says things like "fix this", "what's on screen", "the page I'm on", "see what I'm looking at", "watch my recording". Reads the user's latest SlimSnap JSON capture, which is a structured description of an annotated screenshot or screen recording containing bounding boxes, extracted colors, OCR text, and for recordings the clicks between screens and the spoken captions. About 700 tokens of JSON vs the API per-image cap of 1,568 tokens on Sonnet/Haiku (up to 4,784 on Opus 4.7+ per Anthropic's vision docs), and the agent acts on coordinates more reliably than re-interpreting pixels. The skill discovers where SlimSnap saves files by reading ~/.slimsnap/config.json (no hardcoded folder).
 ---
 
 # slimsnap
 
-SlimSnap (https://slimsnap.ai) is a Mac app that converts a screenshot into structured JSON: bounding boxes, extracted colors, OCR text, and user annotations (arrows, rectangles, highlights, callouts) pointing at what matters. This skill lets you read those captures directly so the user does not have to copy and paste.
+SlimSnap (https://slimsnap.ai) is a Mac and Windows app that converts a screenshot into structured JSON: bounding boxes, extracted colors, OCR text, and user annotations (arrows, rectangles, highlights, callouts) pointing at what matters. Since 0.6.0 it also records the screen: the JSON then holds one frame per screen the user visited, the clicks and scrolls between them, and what the user said as captions. This skill lets you read those captures directly so the user does not have to copy and paste.
 
 ## Where to find captures
 
@@ -31,6 +31,7 @@ SlimSnap publishes its current save folder in a small config file the user does 
        capture.json    the full export, same schema as a saved file
        meta.json       small index: source app, dimensions, element and annotation counts, a text preview
        frame-1.png     one image per frame, already downscaled to 1568px on the long edge
+       recording.mp4   only for recordings, and only when the user turned on "Keep recording videos too" in Settings
    ```
    Read `meta.json` first when scanning several captures; it is a few hundred bytes against a `capture.json` that can be thousands of tokens. Read `capture.json` for the one you actually need.
 
@@ -46,11 +47,11 @@ If the user would rather have typed tools than a folder convention, there is als
 
 ## How to read a capture
 
-Each SlimSnap JSON conforms to the open MIT schema at https://github.com/bickov/slimsnap-schema. Current version is **v2.0** (`frames[]`); older installs still emit v1.0. Branch on the presence of a top-level `frames` array.
+Each SlimSnap JSON conforms to the open MIT schema at https://github.com/bickov/slimsnap-schema. Current version is **v2.1** (`frames[]`, plus recordings); 2.0 is the same without recordings and older installs still emit v1.0. Branch on the presence of a top-level `frames` array, then on `mode`.
 
 ### Schema v2 (current)
 
-- `mode`: `"single"` (a regular screenshot, one frame) or `"scroll"` (a scrollable capture — a whole page, long chat, or feed — split into frames stacked top to bottom).
+- `mode`: `"single"` (a regular screenshot, one frame), `"scroll"` (a scrollable capture — a whole page, long chat, or feed — split into frames stacked top to bottom) or `"video"` (a recording, one frame per screen visited, see below).
 - `capture`: `{ width_px, height_px }` of the WHOLE capture, all frames stacked.
 - `screen` (optional): `{ title, app, url }`. Context about what was captured (browser tab title, app name, URL). Use it to know what kind of code to look for.
 - `frames`: the content. Each frame has:
@@ -63,6 +64,18 @@ Each SlimSnap JSON conforms to the open MIT schema at https://github.com/bickov/
 **Important: `bbox` is `[x, y, width, height]` normalized to 0-1 relative to the FRAME (`frames[].dims`), not pixels and not the whole capture.** Absolute pixel position of anything: `y_px = position.scroll_y_px + bbox_y * dims.height_px`; `x_px = bbox_x * dims.width_px`. Same for `point` (`[x, y]` normalized 0-1). Element/annotation `id`s are unique across ALL frames, so a `target_ref` near a frame boundary may point into the adjacent frame — search all frames when following one.
 
 For `mode: "scroll"`, treat frame order as reading order: frame 0 is the top of the page. Vertical position within the whole capture comes from `position.scroll_y_px`.
+
+### Recordings (`mode: "video"`, schema 2.1)
+
+A recording is not something to watch. Read it as a sequence of screens joined by what the user did:
+
+- `frames[]` have `kind: "temporal"` and `position.t_ms` (milliseconds from the start). Each frame is one screen the user was on. A frame carries its own `screen` (`title`, `app`, `url`) when it differs from the frame before, so check it per frame: a recording often crosses pages. `unchanged` lists ids of elements from earlier frames that are still on screen and are not repeated; search earlier frames when a `target_ref` is not in the current one.
+- `interactions[]` are the edges. Each has `frame` (the screen it happened on), `result_frame` (what it produced), `source` (`click`, `scroll`, or `screen` when only the change was seen), `target_ref` (the element acted on, when known) with `target_source` saying whether that came from the click position or was inferred from an annotation drawn just before, `effect` (`navigation`, `scroll`, `reveal`, `update`) and `change` (how much of the screen moved, 0-1).
+- Captions are annotations with `source: "voice"`: the user's spoken words, placed on the frame they were said on, at the cursor, with `target_ref` resolved to the element under it. Treat the `text` exactly like a typed callout: it is part of the prompt. "this button is in the wrong place" on `el_014` means that element.
+- `transcript[]` is the whole narration in order with `t0`/`t1`, for reading straight through.
+- `media.file` points at the movie. You do not need it; open the frame PNGs (`images[].file`) if you want to see a screen.
+
+To follow what the user did: walk `interactions` in order, read `frames[frame]` for the state, `target_ref` for the control, `frames[result_frame]` for the result, and the voice annotations on each frame for the reason. A bug report recorded this way tells you the exact page (`screen.url`) and the exact element, so go to that code, not to a guess.
 
 ### Schema v1 (older installs)
 
@@ -80,7 +93,7 @@ Treat annotations as the user's intent:
 
 If the capture is recent (modified within the last few minutes) and the user is asking about something visual, prefer using the capture as primary context rather than asking the user to describe what they see. The capture IS the description.
 
-If no recent capture exists in the configured folder, ask the user to capture a screenshot with SlimSnap (`⌘⇧S` by default), annotate it, and save the JSON, then retry.
+If no recent capture exists in the configured folder, ask the user to capture a screenshot with SlimSnap (`⌘⇧S` by default, `⌘⇧R` to record a flow), annotate it, and save the JSON, then retry.
 
 ## Worked example
 
